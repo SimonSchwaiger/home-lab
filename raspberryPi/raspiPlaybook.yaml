@@ -1,0 +1,184 @@
+- hosts: localhost
+  connection: local
+  become: true
+  vars:
+    zerotier_physical_network_interface: eth0
+    ansible_python_interpreter: /usr/bin/python3
+  vars_files:
+    - /vars/secrets.yml
+
+  roles:
+    - { role: m4rcu5nl.zerotier-one, become: true }
+
+  tasks:
+    ## Update Pi
+    - name: Upgrade Apt Packages
+      apt: upgrade=dist force_apt_get=yes
+
+    ## Update home-lab files from github
+    - name: Update Repo from Git
+      shell: "cd ~/git/home-lab && git pull"
+
+    ## User and Dependency Configuration
+    # https://stackoverflow.com/questions/57821778/install-docker-on-ubuntu-using-ansible-with-python3 
+    - name: Create Docker Group
+      become: true
+      group:
+        name: docker
+        state: present
+
+    - name: Add User to Docker Group 
+      become: true
+      user:
+        name: "{{ user }}"
+        groups: docker
+        append: true
+
+    - meta: reset_connection
+
+    - name: Get Current Directory ( PWD )
+      shell: "echo $PWD"
+      register: pwd
+
+    - name: Get UID
+      shell: "echo $UID"
+      register: uid
+
+    - name: Install aptitude
+      apt:
+        name: aptitude
+        state: latest
+        update_cache: true
+
+    - name: Install required system packages
+      apt:
+        pkg:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - software-properties-common
+        state: latest
+        update_cache: true
+
+    ## Install Docker
+    - name: Add Docker GPG apt Key
+      apt_key:
+        url: https://download.docker.com/linux/debian/gpg
+        state: present
+
+    - name: Add Docker Repository
+      apt_repository:
+        repo: "deb https://download.docker.com/linux/debian {{ ansible_facts['distribution_release'] }} stable"
+        state: present
+
+    - name: Update apt and install Docker
+      apt:
+        name: 
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-compose
+        state: latest
+        update_cache: true
+  
+    - name: Install Docker <-> Python Dependencies
+      become: true
+      apt:
+        update_cache: yes
+        state: latest
+        name: python3-pip
+
+    - name: install 'Docker SDK for Python'
+      pip:
+        name: docker
+
+    ## Setup Zerotier as VPN
+    - name: Get ZeroTier Interface Name ( ZT_IFACE )
+      shell: "sudo zerotier-cli listnetworks | cut -d' ' -f8 | sed -n 2p"
+      register: zerotier_interface
+
+    - name: Get ZeroTier IP Address ( ZT_ADDR )
+      shell: "sudo zerotier-cli listnetworks | cut -d' ' -f9 | sed -n 2p | cut -d'/' -f1"
+      register: zerotier_address
+
+    - name: Get Physical Subnet ( PHY_SUB )
+      shell: "ip -o -f inet addr show | awk '/scope global/ {print $4}' | sed -n 1p"
+      register: physical_subnet
+
+    - name: Show Zerotier Interface
+      debug: msg=" {{ zerotier_interface.stdout }} "
+
+    - name: Show Zerotier Address
+      debug: msg=" {{ zerotier_address.stdout }} "
+
+    - name: Show Physical Subnet
+      debug: msg=" {{ physical_subnet.stdout }} "
+
+    - name: ZeroTier Online UI Config. Please enter the following route to Settings - Managed Routes
+      debug: msg=" Destination {{ physical_subnet.stdout }}  (Via) {{ zerotier_address.stdout }} "
+
+    # Config according to https://zerotier.atlassian.net/wiki/spaces/SD/pages/224395274/Route+between+ZeroTier+and+Physical+Networks
+    # Config using sysctl and iptables should do the same as the shell commands, but didn't work consistently
+    #- name: Set IP Forwarding
+    #  ansible.posix.sysctl:
+    #    name: net.ipv4.ip_forward
+    #    value: '1'
+    #    sysctl_set: yes
+    
+    #- name: First IP Table Entry (see Route between ZeroTier and Physical Networks Tutorial)
+    #  iptables:
+    #    table: nat
+    #    chain: POSTROUTING
+    #    out_interface: "{{ zerotier_physical_network_interface }}"
+    #    jump: MASQUERADE
+    
+    #- name: Second IP Table Entry
+    #  iptables:
+    #    chain: FORWARD
+    #    in_interface: "{{ zerotier_physical_network_interface }}"
+    #    out_interface: "{{ zerotier_interface.stdout }}"
+    #    ctstate: ESTABLISHED,RELATED
+    #    jump: ACCEPT
+
+    #- name: Third IP Table Entry
+    #  iptables:
+    #    chain: FORWARD
+    #    in_interface: "{{ zerotier_interface.stdout }}"
+    #    out_interface: "{{ zerotier_physical_network_interface }}"
+    #    jump: ACCEPT
+
+    - name: Enable IP Forwarding
+      shell: "sudo sysctl -w net.ipv4.ip_forward=1"
+
+    - name: First IP Table Entry
+      shell: "sudo iptables -t nat -A POSTROUTING -o {{ zerotier_physical_network_interface }} -j MASQUERADE"
+    
+    - name: Second IP Table Entry
+      shell: "sudo iptables -A FORWARD -i {{ zerotier_physical_network_interface }} -o {{ zerotier_interface.stdout }} -m state --state RELATED,ESTABLISHED -j ACCEPT"
+
+    - name: Third IP Table Entry
+      shell: "sudo iptables -A FORWARD -i {{ zerotier_interface.stdout }} -o {{ zerotier_physical_network_interface }} -j ACCEPT"
+
+    ## Homer
+
+    #- name: Pull Homer Docker Container
+    #  docker_container:
+    #    name: b4bz/homer
+    #    source: pull
+
+    #- name: Start Homer Docker Container
+    #  docker_container:
+    #    name: myhomer
+    #    image: b4bz/homer
+    #    state: started
+    #    restart: yes
+    #    #ports:
+    #    #- "8080:8080"
+    #    network_mode: "host"
+    #    volumes:
+    #    - "{{ pwd.stdout }}/homerAssets:/www/assets"
+    #    env:
+    #      INIT_ASSETS: "1"
+    #    user: "{{ uid.stdout }}"
+
+
