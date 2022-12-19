@@ -55,7 +55,7 @@ After=multi-user.target
 
 [Service]
 Type=exec
-ExecStart=$VENVDIR/bin/ansible-playbook -i inventory $SCRIPTDIR/raspiPlaybook.yaml
+ExecStart=$VENVDIR/bin/ansible-playbook -i $SCRIPTDIR/inventory $SCRIPTDIR/raspiPlaybook.yaml
 
 [Install]
 WantedBy=multi-user.target" >> playbook.service
