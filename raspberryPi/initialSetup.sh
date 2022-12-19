@@ -5,7 +5,7 @@
 
 ## Get script directory
 # https://stackoverflow.com/questions/59895/how-do-i-get-the-directory-where-a-bash-script-is-located-from-within-the-script
-SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+SCRIPTDIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
 ## Python
 alias python="python3"
@@ -55,7 +55,7 @@ After=multi-user.target
 
 [Service]
 Type=exec
-ExecStart=$SCRIPT_DIR/myenv/bin/ansible-playbook -i inventory $SCRIPT_DIR/raspiPlaybook.yaml
+ExecStart=$VENVDIR/bin/ansible-playbook -i inventory $SCRIPTDIR/raspiPlaybook.yaml
 
 [Install]
 WantedBy=multi-user.target" >> playbook.service
