@@ -5,7 +5,7 @@
     zerotier_physical_network_interface: eth0
     ansible_python_interpreter: /usr/bin/python3
   vars_files:
-    - /vars/secrets.yml
+    - ./vars/secrets.yml
 
   roles:
     - { role: m4rcu5nl.zerotier-one, become: true }
