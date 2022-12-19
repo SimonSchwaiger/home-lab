@@ -66,6 +66,9 @@ sudo chmod 644 /lib/systemd/system/playbook.service
 # Delete local service file
 rm playbook.service
 
+# Enable Service
+sudo systemctl enable playbook.service
+
 # Use ansible to install everything
 source $VENVDIR/bin/activate && ansible-playbook -i inventory raspiPlaybook.yaml
 

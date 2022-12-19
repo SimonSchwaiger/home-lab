@@ -20,6 +20,43 @@
       shell: "echo $UID"
       register: uid
 
+    ## Setup Zerotier as VPN (Placed here for faster boot speed of vpn)
+    - name: Get ZeroTier Interface Name ( ZT_IFACE )
+      shell: "sudo zerotier-cli listnetworks | cut -d' ' -f8 | sed -n 2p"
+      register: zerotier_interface
+
+    - name: Get ZeroTier IP Address ( ZT_ADDR )
+      shell: "sudo zerotier-cli listnetworks | cut -d' ' -f9 | sed -n 2p | cut -d'/' -f1"
+      register: zerotier_address
+
+    - name: Get Physical Subnet ( PHY_SUB )
+      shell: "ip -o -f inet addr show | awk '/scope global/ {print $4}' | sed -n 1p"
+      register: physical_subnet
+
+    - name: Show Zerotier Interface
+      debug: msg=" {{ zerotier_interface.stdout }} "
+
+    - name: Show Zerotier Address
+      debug: msg=" {{ zerotier_address.stdout }} "
+
+    - name: Show Physical Subnet
+      debug: msg=" {{ physical_subnet.stdout }} "
+
+    - name: ZeroTier Online UI Config. Please enter the following route to Settings - Managed Routes
+      debug: msg=" Destination {{ physical_subnet.stdout }}  (Via) {{ zerotier_address.stdout }} "
+
+    - name: Enable IP Forwarding
+      shell: "sudo sysctl -w net.ipv4.ip_forward=1"
+
+    - name: First IP Table Entry
+      shell: "sudo iptables -t nat -A POSTROUTING -o {{ zerotier_physical_network_interface }} -j MASQUERADE"
+    
+    - name: Second IP Table Entry
+      shell: "sudo iptables -A FORWARD -i {{ zerotier_physical_network_interface }} -o {{ zerotier_interface.stdout }} -m state --state RELATED,ESTABLISHED -j ACCEPT"
+
+    - name: Third IP Table Entry
+      shell: "sudo iptables -A FORWARD -i {{ zerotier_interface.stdout }} -o {{ zerotier_physical_network_interface }} -j ACCEPT"
+
     ## Update Pi
     - name: Upgrade Apt Packages
       apt: upgrade=dist force_apt_get=yes
@@ -90,43 +127,6 @@
     - name: install 'Docker SDK for Python'
       pip:
         name: docker
-
-    ## Setup Zerotier as VPN
-    - name: Get ZeroTier Interface Name ( ZT_IFACE )
-      shell: "sudo zerotier-cli listnetworks | cut -d' ' -f8 | sed -n 2p"
-      register: zerotier_interface
-
-    - name: Get ZeroTier IP Address ( ZT_ADDR )
-      shell: "sudo zerotier-cli listnetworks | cut -d' ' -f9 | sed -n 2p | cut -d'/' -f1"
-      register: zerotier_address
-
-    - name: Get Physical Subnet ( PHY_SUB )
-      shell: "ip -o -f inet addr show | awk '/scope global/ {print $4}' | sed -n 1p"
-      register: physical_subnet
-
-    - name: Show Zerotier Interface
-      debug: msg=" {{ zerotier_interface.stdout }} "
-
-    - name: Show Zerotier Address
-      debug: msg=" {{ zerotier_address.stdout }} "
-
-    - name: Show Physical Subnet
-      debug: msg=" {{ physical_subnet.stdout }} "
-
-    - name: ZeroTier Online UI Config. Please enter the following route to Settings - Managed Routes
-      debug: msg=" Destination {{ physical_subnet.stdout }}  (Via) {{ zerotier_address.stdout }} "
-
-    - name: Enable IP Forwarding
-      shell: "sudo sysctl -w net.ipv4.ip_forward=1"
-
-    - name: First IP Table Entry
-      shell: "sudo iptables -t nat -A POSTROUTING -o {{ zerotier_physical_network_interface }} -j MASQUERADE"
-    
-    - name: Second IP Table Entry
-      shell: "sudo iptables -A FORWARD -i {{ zerotier_physical_network_interface }} -o {{ zerotier_interface.stdout }} -m state --state RELATED,ESTABLISHED -j ACCEPT"
-
-    - name: Third IP Table Entry
-      shell: "sudo iptables -A FORWARD -i {{ zerotier_interface.stdout }} -o {{ zerotier_physical_network_interface }} -j ACCEPT"
 
     ## Homer
 
