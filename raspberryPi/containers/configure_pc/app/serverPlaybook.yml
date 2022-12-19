@@ -1,0 +1,10 @@
+- connection: local
+  become: true
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+  vars_files:
+    - /vars/secrets.yml
+
+  tasks:
+    - name: Hello World
+      shell: "echo 'Hello World!'"

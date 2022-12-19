@@ -11,13 +11,22 @@
     - { role: m4rcu5nl.zerotier-one, become: true }
 
   tasks:
+    ## Store repo directory and user id
+    - name: Get Current Directory ( PWD )
+      shell: "echo $PWD"
+      register: pwd
+
+    - name: Get UID
+      shell: "echo $UID"
+      register: uid
+
     ## Update Pi
     - name: Upgrade Apt Packages
       apt: upgrade=dist force_apt_get=yes
 
     ## Update home-lab files from github
     - name: Update Repo from Git
-      shell: "cd ~/git/home-lab && git pull"
+      shell: "cd {{ pwd.stdout }}/.. && git pull"
 
     ## User and Dependency Configuration
     # https://stackoverflow.com/questions/57821778/install-docker-on-ubuntu-using-ansible-with-python3 
@@ -33,16 +42,6 @@
         name: "{{ user }}"
         groups: docker
         append: true
-
-    - meta: reset_connection
-
-    - name: Get Current Directory ( PWD )
-      shell: "echo $PWD"
-      register: pwd
-
-    - name: Get UID
-      shell: "echo $UID"
-      register: uid
 
     - name: Install aptitude
       apt:
@@ -116,36 +115,6 @@
 
     - name: ZeroTier Online UI Config. Please enter the following route to Settings - Managed Routes
       debug: msg=" Destination {{ physical_subnet.stdout }}  (Via) {{ zerotier_address.stdout }} "
-
-    # Config according to https://zerotier.atlassian.net/wiki/spaces/SD/pages/224395274/Route+between+ZeroTier+and+Physical+Networks
-    # Config using sysctl and iptables should do the same as the shell commands, but didn't work consistently
-    #- name: Set IP Forwarding
-    #  ansible.posix.sysctl:
-    #    name: net.ipv4.ip_forward
-    #    value: '1'
-    #    sysctl_set: yes
-    
-    #- name: First IP Table Entry (see Route between ZeroTier and Physical Networks Tutorial)
-    #  iptables:
-    #    table: nat
-    #    chain: POSTROUTING
-    #    out_interface: "{{ zerotier_physical_network_interface }}"
-    #    jump: MASQUERADE
-    
-    #- name: Second IP Table Entry
-    #  iptables:
-    #    chain: FORWARD
-    #    in_interface: "{{ zerotier_physical_network_interface }}"
-    #    out_interface: "{{ zerotier_interface.stdout }}"
-    #    ctstate: ESTABLISHED,RELATED
-    #    jump: ACCEPT
-
-    #- name: Third IP Table Entry
-    #  iptables:
-    #    chain: FORWARD
-    #    in_interface: "{{ zerotier_interface.stdout }}"
-    #    out_interface: "{{ zerotier_physical_network_interface }}"
-    #    jump: ACCEPT
 
     - name: Enable IP Forwarding
       shell: "sudo sysctl -w net.ipv4.ip_forward=1"
