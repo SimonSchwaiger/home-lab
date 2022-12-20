@@ -28,7 +28,9 @@ if ! [ -x "$(command -v rustc)" ]; then
   curl https://sh.rustup.rs -sSf | sh && source $HOME/.cargo/env
 fi
 
+# Set venv directory and get username from secrets
 VENVDIR="/home/pi/myenv"
+USERNAME = grep 'user' vars/secrets.yml | tail -n1 | cut -c 7-
 
 if [ ! -d "$VENVDIR" ]; then 
     # Create Virtualenv
@@ -55,6 +57,7 @@ After=multi-user.target
 
 [Service]
 Type=exec
+User=$USERNAME
 ExecStart=$VENVDIR/bin/ansible-playbook -i $SCRIPTDIR/inventory $SCRIPTDIR/raspiPlaybook.yaml
 
 [Install]
