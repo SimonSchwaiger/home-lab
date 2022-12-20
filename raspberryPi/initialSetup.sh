@@ -30,7 +30,7 @@ fi
 
 # Set venv directory and get username from secrets
 VENVDIR="/home/pi/myenv"
-USERNAME = grep 'user' $SCRIPTDIR/vars/secrets.yml | tail -n1 | cut -c 7-
+USERNAME=grep 'user' $SCRIPTDIR/vars/secrets.yml | tail -n1 | cut -c 7-
 
 if [ ! -d "$VENVDIR" ]; then 
     # Create Virtualenv
