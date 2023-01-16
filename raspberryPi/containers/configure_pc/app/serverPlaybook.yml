@@ -1,10 +1,77 @@
-- connection: local
+- hosts: all
   become: true
   vars:
     ansible_python_interpreter: /usr/bin/python3
   vars_files:
-    - /vars/secrets.yml
+    - /app/vars/secrets.yml
 
   tasks:
     - name: Hello World
       shell: "echo 'Hello World!'"
+
+    ## Update PC
+    - name: Upgrade Apt Packages
+      apt: upgrade=dist force_apt_get=yes
+
+    ## User and Dependency Configuration for Docker
+    # https://stackoverflow.com/questions/57821778/install-docker-on-ubuntu-using-ansible-with-python3 
+    - name: Create Docker Group
+      become: true
+      group:
+        name: docker
+        state: present
+
+    - name: Add User to Docker Group 
+      become: true
+      user:
+        name: "{{ user }}"
+        groups: docker
+        append: true
+
+    - name: Install aptitude
+      apt:
+        name: aptitude
+        state: latest
+        update_cache: true
+
+    - name: Install required system packages
+      apt:
+        pkg:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - software-properties-common
+        state: latest
+        update_cache: true
+
+    ## Install Docker
+    - name: Add Docker GPG apt Key
+      apt_key:
+        url: https://download.docker.com/linux/debian/gpg
+        state: present
+
+    - name: Add Docker Repository
+      apt_repository:
+        repo: "deb https://download.docker.com/linux/debian {{ ansible_facts['distribution_release'] }} stable"
+        state: present
+
+    - name: Update apt and install Docker
+      apt:
+        name: 
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-compose
+        state: latest
+        update_cache: true
+
+    - name: Install Docker <-> Python Dependencies
+      become: true
+      apt:
+        update_cache: yes
+        state: latest
+        name: python3-pip
+
+    - name: install 'Docker SDK for Python'
+      pip:
+        name: docker
