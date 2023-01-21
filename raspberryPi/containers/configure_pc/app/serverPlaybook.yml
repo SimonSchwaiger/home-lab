@@ -1,7 +1,27 @@
 - hosts: all
   become: true
+
+  pre_tasks:
+    - name: Add User
+      ansible.builtin.user:
+        name: "{{ pc_user }}" 
+        groups: users
+        append: true
+
+  #roles:
+  #  - role: vladgh.samba.server
   vars:
     ansible_python_interpreter: /usr/bin/python3
+    samba_users:
+    - name: "{{ pc_user }}"
+      password: "{{ pc_password }}"
+    samba_shares:
+    - name: gitshare
+      valid_users: "{{ pc_user }}"
+      write_list: "{{ pc_user }}"
+      group: "{{ pc_user }}"
+      path: "/home/{{ pc_user }}/git"
+
   vars_files:
     - /app/vars/secrets.yml
 
@@ -24,7 +44,7 @@
     - name: Add User to Docker Group 
       become: true
       user:
-        name: "{{ user }}"
+        name: "{{ pc_user }}"
         groups: docker
         append: true
 
@@ -47,12 +67,12 @@
     ## Install Docker
     - name: Add Docker GPG apt Key
       apt_key:
-        url: https://download.docker.com/linux/debian/gpg
+        url: https://download.docker.com/linux/ubuntu/gpg
         state: present
 
     - name: Add Docker Repository
       apt_repository:
-        repo: "deb https://download.docker.com/linux/debian {{ ansible_facts['distribution_release'] }} stable"
+        repo: "deb https://download.docker.com/linux/ubuntu {{ ansible_facts['distribution_release'] }} stable"
         state: present
 
     - name: Update apt and install Docker
@@ -72,6 +92,43 @@
         state: latest
         name: python3-pip
 
-    - name: install 'Docker SDK for Python'
+    - name: Install 'Docker SDK for Python'
       pip:
         name: docker
+
+    ## Configure Samba
+
+    - name: Install samba packages
+      apt:
+        name: 
+          - samba
+          - samba-common-bin
+        state: latest
+        update_cache: true
+
+    # Add samba users Source: https://stackoverflow.com/questions/44762488/non-interactive-samba-user-creation-via-ansible
+    - name: shell - create samba users
+      shell: >
+        set -e -o pipefail
+        && (pdbedit --user={{ item.username }} 2>&1 > /dev/null)
+        || (echo '{{ item.password }}'; echo '{{ item.password }}')
+        | smbpasswd -s -a {{ item.username }}
+      args:
+        executable: /bin/bash
+      register: samba_create_users
+      changed_when: "'Added user' in samba_create_users.stdout"
+      loop: "{{ samba_users }}"
+      no_log: true
+
+    - name: shell - set samba passwords correctly
+      shell: >
+        set -e -o pipefail
+        && (smbclient -U {{ item.username }}%{{ item.password }} -L 127.0.0.1 2>&1 > /dev/null)
+        || (echo '{{ item.password }}'; echo '{{ item.password }}')
+        | smbpasswd {{ item.username }}
+      args:
+        executable: /bin/bash
+      register: samba_verify_users
+      changed_when: "'New SMB password' in samba_verify_users.stdout"
+      loop: "{{ samba_users }}"
+      no_log: true

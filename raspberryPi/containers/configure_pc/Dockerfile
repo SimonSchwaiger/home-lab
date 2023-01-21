@@ -7,9 +7,11 @@ RUN apt-get update && apt-get install -q -y --no-install-recommends \
     python3 python3-pip python-is-python3 openssh-client openssh-server sshpass \
     && pip3 install ansible pyyaml
 
-# Copy, script, playbook and get secrets
+# Install ansible samba collection
+RUN ansible-galaxy collection install vladgh.samba  --upgrade
+
+# Copy, script, playbook and secrets (all in app folder)
 COPY ./app/ /app/
-#COPY ../../vars/ /app/vars/
 
 # Create inventory file
 RUN python /app/createInventory.py
