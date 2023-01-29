@@ -8,30 +8,34 @@
         groups: users
         append: true
 
-  #roles:
-  #  - role: vladgh.samba.server
   vars:
     ansible_python_interpreter: /usr/bin/python3
     samba_users:
-    - name: "{{ pc_user }}"
+    - username: "{{ pc_user }}"
       password: "{{ pc_password }}"
-    samba_shares:
-    - name: gitshare
-      valid_users: "{{ pc_user }}"
-      write_list: "{{ pc_user }}"
-      group: "{{ pc_user }}"
-      path: "/home/{{ pc_user }}/git"
 
   vars_files:
     - /app/vars/secrets.yml
+
+  roles:
+    - { role: m4rcu5nl.zerotier-one, become: true }
 
   tasks:
     - name: Hello World
       shell: "echo 'Hello World!'"
 
     ## Update PC
-    - name: Upgrade Apt Packages
-      apt: upgrade=dist force_apt_get=yes
+    - name: Update all packages to their latest version
+      ansible.builtin.apt:
+        name: "*"
+        state: latest
+
+    - name: Install ufw for firewall config
+      ansible.builtin.apt:
+        name: ufw
+
+    - name: Allow incoming access on jupyterlab port 8888
+      shell: "sudo ufw allow 8888/tcp"
 
     ## User and Dependency Configuration for Docker
     # https://stackoverflow.com/questions/57821778/install-docker-on-ubuntu-using-ansible-with-python3 
@@ -97,7 +101,9 @@
         name: docker
 
     ## Configure Samba
-
+    # Samba config sources:
+    # https://pimylifeup.com/raspberry-pi-samba/
+    # https://www.how2shout.com/linux/how-to-install-samba-on-ubuntu-22-04-lts-jammy-linux/
     - name: Install samba packages
       apt:
         name: 
@@ -109,26 +115,48 @@
     # Add samba users Source: https://stackoverflow.com/questions/44762488/non-interactive-samba-user-creation-via-ansible
     - name: shell - create samba users
       shell: >
-        set -e -o pipefail
-        && (pdbedit --user={{ item.username }} 2>&1 > /dev/null)
+        (pdbedit --user={{ item.username }} 2>&1 > /dev/null)
         || (echo '{{ item.password }}'; echo '{{ item.password }}')
         | smbpasswd -s -a {{ item.username }}
-      args:
-        executable: /bin/bash
-      register: samba_create_users
-      changed_when: "'Added user' in samba_create_users.stdout"
-      loop: "{{ samba_users }}"
-      no_log: true
+      register: create_samba_users
+      changed_when: "'Added user' in create_samba_users.stdout"
+      become: true
+      with_items: "{{ samba_users }}"
+      loop_control:
+        label: "{{ item.username }}"
 
     - name: shell - set samba passwords correctly
       shell: >
-        set -e -o pipefail
-        && (smbclient -U {{ item.username }}%{{ item.password }} -L 127.0.0.1 2>&1 > /dev/null)
+        (smbclient -U {{ item.username }}%{{ item.password }} -L 127.0.0.1 2>&1 > /dev/null)
         || (echo '{{ item.password }}'; echo '{{ item.password }}')
         | smbpasswd {{ item.username }}
-      args:
-        executable: /bin/bash
-      register: samba_verify_users
-      changed_when: "'New SMB password' in samba_verify_users.stdout"
-      loop: "{{ samba_users }}"
-      no_log: true
+      register: verify_samba_users
+      changed_when: "'New SMB password' in verify_samba_users.stdout"
+      become: true
+      with_items: "{{ samba_users }}"
+      loop_control:
+        label: "{{ item.username }}"
+    
+    # Create samba home folder share this is split into two commands because making sure that the line just exists in a file is apparently not a thing
+    # https://stackoverflow.com/questions/29075287/ansible-insert-line-if-not-exists
+    - name: Test for homeshare existance
+      shell: "grep -c 'homeshare' /etc/samba/smb.conf || true"
+      register: homeshare_present
+
+    - name: Add homeshare to smb config
+      ansible.builtin.lineinfile:
+        path: /etc/samba/smb.conf
+        line: "[homeshare]\n  path = /home/{{ pc_user }}\n  public = no\n  writeable=Yes\n  create mask=0777\n  directory mask=0777"
+      when: homeshare_present.stdout == "0"
+
+    - name: Enable samba in firewall
+      shell: "ufw allow samba"
+
+    - name: Enable samba
+      shell: "systemctl enable smbd && systemctl restart smbd"
+
+    - name: Enable netbios
+      shell: "systemctl enable nmbd && systemctl restart nmbd"
+  
+    ## TODO: add program to autostart that pings raspberry
+    ## TODO: automatically start docker containers

@@ -7,8 +7,8 @@ RUN apt-get update && apt-get install -q -y --no-install-recommends \
     python3 python3-pip python-is-python3 openssh-client openssh-server sshpass \
     && pip3 install ansible pyyaml
 
-# Install ansible samba collection
-RUN ansible-galaxy collection install vladgh.samba  --upgrade
+# Install ansiblbe zerotier role
+RUN ansible-galaxy install m4rcu5nl.zerotier-one
 
 # Copy, script, playbook and secrets (all in app folder)
 COPY ./app/ /app/
