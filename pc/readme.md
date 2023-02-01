@@ -19,6 +19,6 @@
     - `sudo parted /dev/sdb set 1 raid on`
 3. Create raid `sudo mdadm --create /dev/md0 --auto md --level=1 --raid-devices=2 /dev/sde1 /dev/sdf1`
 4. Create file system `sudo mkfs.ext4 /dev/md0`
-5. Automatically mount raid1 filesystem by adding `/dev/md0     /media/data      ext4      defaults 0 2` to */etc/fstab*
+5. Automatically mount raid1 filesystem by adding `/dev/md0     /media/data      ext4      defaults 0 2` to */etc/fstab* . Alternatively, you can refer to the array using its UUID as shown [here](https://askubuntu.com/questions/540202/mount-an-mdadm-raid-1-drive-at-boot).
 6. Reload fstab to check your configuration using `sudo mount -a`
 
